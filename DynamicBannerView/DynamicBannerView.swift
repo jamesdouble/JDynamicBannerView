@@ -10,17 +10,26 @@ import UIKit
 
 class DynamicCycleScrollViewCell: UICollectionViewCell {
     
+    var targetView: UIView?
+    
     override func awakeFromNib() {
         self.isUserInteractionEnabled = true
     }
     
+    override func prepareForReuse() {
+        targetView?.tag = 0
+        targetView?.removeFromSuperview()
+    }
+    
     func insertRootView(_ target: UIView, edges: UIEdgeInsets) {
-        target.translatesAutoresizingMaskIntoConstraints = false
-        self.contentView.addSubview(target)
-        let xC = NSLayoutConstraint(item: target, attribute: .centerX, relatedBy: .equal, toItem: self.contentView, attribute: .centerX, multiplier: 1.0, constant: 0.0)
-        let yC = NSLayoutConstraint(item: target, attribute: .width, relatedBy: .equal, toItem: self.contentView, attribute: .width, multiplier: 1.0, constant: 0.0)
-        let wC = NSLayoutConstraint(item: target, attribute: .top, relatedBy: .equal, toItem: self.contentView, attribute: .top, multiplier: 1.0, constant: edges.top)
-        let hC = NSLayoutConstraint(item: target, attribute: .bottom, relatedBy: .equal, toItem: self.contentView, attribute: .bottom, multiplier: 1.0, constant: -edges.bottom)
+        targetView = target
+        guard let targetView = targetView else { return }
+        targetView.translatesAutoresizingMaskIntoConstraints = false
+        self.contentView.addSubview(targetView)
+        let xC = NSLayoutConstraint(item: targetView, attribute: .centerX, relatedBy: .equal, toItem: self.contentView, attribute: .centerX, multiplier: 1.0, constant: 0.0)
+        let yC = NSLayoutConstraint(item: targetView, attribute: .width, relatedBy: .equal, toItem: self.contentView, attribute: .width, multiplier: 1.0, constant: 0.0)
+        let wC = NSLayoutConstraint(item: targetView, attribute: .top, relatedBy: .equal, toItem: self.contentView, attribute: .top, multiplier: 1.0, constant: edges.top)
+        let hC = NSLayoutConstraint(item: targetView, attribute: .bottom, relatedBy: .equal, toItem: self.contentView, attribute: .bottom, multiplier: 1.0, constant: -edges.bottom)
         self.contentView.addConstraints([xC, yC, wC, hC])
     }
 }
@@ -50,7 +59,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         return dynamicCycleScrollView.minimumScale
     }
     internal var leadingSpacing: CGFloat {
-        return dynamicCycleScrollView.edges.left
+        return 0
     }
     internal var isInfinite: Bool {
         return dynamicCycleScrollView.infinityScrolling
@@ -126,21 +135,23 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
             return layoutAttributes
         }
         // Calculate start position and index of certain rects
-        let numberOfItemsBefore = max(Int((rect.minX-self.leadingSpacing)/self.itemSpacing),0)
+        let numberOfItemsBefore = max(Int((rect.minX-self.leadingSpacing) / self.itemSpacing), 0)
         let startPosition = self.leadingSpacing + CGFloat(numberOfItemsBefore)*self.itemSpacing
         let startIndex = numberOfItemsBefore
         // Create layout attributes
         var itemIndex = startIndex
         
         var origin = startPosition
-        let maxPosition = min(rect.maxX,self.contentSize.width-self.actualItemSize.width-self.leadingSpacing)
-        while origin-maxPosition <= max(CGFloat(100.0) * .ulpOfOne * fabs(origin+maxPosition), .leastNonzeroMagnitude) {
-            let indexPath = IndexPath(item: itemIndex%self.numberOfItems, section: itemIndex/self.numberOfItems)
+        let maxPosition = min(rect.maxX, self.contentSize.width - self.actualItemSize.width - self.leadingSpacing)
+        var condition = max(CGFloat(100.0) * .ulpOfOne * fabs(origin+maxPosition), .leastNonzeroMagnitude)
+        while origin-maxPosition <= condition {
+            let indexPath = IndexPath(item: itemIndex % self.numberOfItems, section: itemIndex/self.numberOfItems)
             let attributes = self.layoutAttributesForItem(at: indexPath)
             self.applyTransform(to: attributes)
             layoutAttributes.append(attributes)
             itemIndex += 1
             origin += self.itemSpacing
+            condition = max(CGFloat(100.0) * .ulpOfOne * fabs(origin+maxPosition), .leastNonzeroMagnitude)
         }
         return layoutAttributes
     }
@@ -236,6 +247,11 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
     
 }
 
+protocol DynamicCycleScrollViewDataSource {
+    func numberOfRowsIn(_ cycleView: DynamicCycleScrollView) -> Int
+    func viewFor(_ cycleView: DynamicCycleScrollView) -> UIView
+}
+
 @IBDesignable class DynamicCycleScrollView: UIView {
     
     ///統一上下左右間距
@@ -297,25 +313,23 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
     
     public var minimumScale: CGFloat = 0.85
     
-    fileprivate var viewDataSource: [UIView] = []
-    fileprivate var viewCount: Int {
-        get {
-            return viewDataSource.count
-        }
-    }
+    fileprivate var viewCount: Int = 0
+    fileprivate var viewBlock: ((Int) -> UIView)?
+    fileprivate var viewCache: [Int: UIView] = [:]
     
     fileprivate var numberOfSections: Int {
         if viewCount == 0 { return 1 }
-        return self.infinityScrolling && (self.viewCount > 1) ? 100 : 1
+        return self.infinityScrolling && (self.viewCount > 1) ? 1000 : 1
     }
     
-    public func setViews(_ views: [UIView]) {
-        viewDataSource = views
-        self.autoScrolling = views.count > 1
-        self.collectionView.isScrollEnabled = views.count > 1
-        self.collectionView.reloadData()
-        self.layoutIfNeeded()
+    public func setView(viewCount: Int, viewBlock: ((Int) -> UIView)?) {
+        self.viewCount = viewCount
+        self.viewBlock = viewBlock
+        viewCache.removeAll()
+        self.collectionView.isScrollEnabled = viewCount > 1
+        self.infinityScrolling = viewCount > 1
         self.collectionViewLayout.forceInvalidate()
+        self.collectionView.reloadData()
     }
     
     public var clickBlock: ((Int) -> Void)?
@@ -347,14 +361,21 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         self.init(frame: CGRect.zero)
     }
     
-    init(frame: CGRect, views: [UIView], insects: CGFloat = 5.0, cellGap: CGFloat = 5.0, tailWidth: CGFloat = 10.0, autoScrolling: Bool = true) {
+    init(frame: CGRect, insects: CGFloat = 5.0, cellGap: CGFloat = 5.0, tailWidth: CGFloat = 10.0, autoScrolling: Bool = true) {
         super.init(frame: frame)
         self.commonInit()
-        self.setViews(views)
         self.defaultInsects = insects
-        self.autoScrolling = views.count > 1 ? autoScrolling : false
-        self.collectionView.reloadData()
-        self.layoutIfNeeded()
+    }
+    
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if self.window != nil {
+            scrollTimer?.invalidate()
+            scrollTimer = Timer(timeInterval: autoScrollInterval, target: self, selector: #selector(DynamicCycleScrollView.fireTimer(sender:)), userInfo: nil, repeats: true)
+            RunLoop.current.add(scrollTimer!, forMode: .defaultRunLoopMode)
+        } else {
+            scrollTimer?.invalidate()
+        }
     }
     
     override func didMoveToSuperview() {
@@ -401,7 +422,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
 extension DynamicCycleScrollView {
     
     @objc func fireTimer(sender: Any) {
-        if self.collectionView.isDragging {
+        if self.collectionView.isDragging || self.viewCount < 2 {
             return
         }
         let next = self.collectionViewLayout.getNowIndexPath()
@@ -421,8 +442,17 @@ extension DynamicCycleScrollView: UICollectionViewDataSource {
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "DynamicCycleScrollViewCell", for: indexPath) as! DynamicCycleScrollViewCell
-        let view = viewDataSource[indexPath.row % viewCount]
-        cell.insertRootView(view, edges: self.edges)
+        if let cahceView = viewCache[indexPath.item] {  //有緩存
+            if cahceView.tag == 0 { //未被佔用
+                cahceView.tag = 1
+                cell.insertRootView(cahceView, edges: self.edges)
+            } else if cahceView.tag == 1, let secondView = viewBlock?(indexPath.item) {
+                cell.insertRootView(secondView, edges: self.edges)
+            }
+        } else if let view = viewBlock?(indexPath.item) { //無緩存
+            viewCache[indexPath.item] = view
+            cell.insertRootView(view, edges: self.edges)
+        }
         return cell
     }
 }
