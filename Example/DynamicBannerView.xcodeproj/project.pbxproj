@@ -12,7 +12,7 @@
 		4FBDD93C209AB1FA00C6D3A7 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4FBDD93A209AB1FA00C6D3A7 /* Main.storyboard */; };
 		4FBDD93E209AB1FD00C6D3A7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4FBDD93D209AB1FD00C6D3A7 /* Assets.xcassets */; };
 		4FBDD941209AB1FD00C6D3A7 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 4FBDD93F209AB1FD00C6D3A7 /* LaunchScreen.storyboard */; };
-		4FBDD949209AB22D00C6D3A7 /* DynamicBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBDD948209AB22D00C6D3A7 /* DynamicBannerView.swift */; };
+		4FEE807820C8FBD50004242B /* DynamicBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FEE807720C8FBD50004242B /* DynamicBannerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,7 +23,7 @@
 		4FBDD93D209AB1FD00C6D3A7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4FBDD940209AB1FD00C6D3A7 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		4FBDD942209AB1FD00C6D3A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		4FBDD948209AB22D00C6D3A7 /* DynamicBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicBannerView.swift; sourceTree = "<group>"; };
+		4FEE807720C8FBD50004242B /* DynamicBannerView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = DynamicBannerView.swift; path = ../../JDynamicBannerView/DynamicBannerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -56,8 +56,8 @@
 		4FBDD935209AB1FA00C6D3A7 /* DynamicBannerView */ = {
 			isa = PBXGroup;
 			children = (
+				4FEE807720C8FBD50004242B /* DynamicBannerView.swift */,
 				4FBDD936209AB1FA00C6D3A7 /* AppDelegate.swift */,
-				4FBDD948209AB22D00C6D3A7 /* DynamicBannerView.swift */,
 				4FBDD938209AB1FA00C6D3A7 /* ViewController.swift */,
 				4FBDD93A209AB1FA00C6D3A7 /* Main.storyboard */,
 				4FBDD93D209AB1FD00C6D3A7 /* Assets.xcassets */,
@@ -138,8 +138,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4FEE807820C8FBD50004242B /* DynamicBannerView.swift in Sources */,
 				4FBDD939209AB1FA00C6D3A7 /* ViewController.swift in Sources */,
-				4FBDD949209AB22D00C6D3A7 /* DynamicBannerView.swift in Sources */,
 				4FBDD937209AB1FA00C6D3A7 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -287,6 +287,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 857SMZQ3R8;
 				INFOPLIST_FILE = DynamicBannerView/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -305,6 +306,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 857SMZQ3R8;
 				INFOPLIST_FILE = DynamicBannerView/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

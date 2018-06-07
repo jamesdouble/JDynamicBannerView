@@ -15,24 +15,22 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
-        var views: [UIView] = []
-        for idx in 0..<1 {
-            let imgName = "test\(idx+1)"
-            let img = UIImage(named: imgName)
+        test = DynamicCycleScrollView(frame: CGRect(origin: CGPoint(x: 5, y: 100), size: CGSize(width: 340, height: 100)))
+        test.setView(viewCount: 1) { (index) -> UIView in
+            let text = "test\(index+1)"
+            let img = UIImage(named: text)
             let imgView = UIImageView(image: img)
             imgView.layer.cornerRadius = 5.0
             imgView.clipsToBounds = true
-            views.append(imgView)
+            return imgView
         }
-        test = DynamicCycleScrollView(frame: CGRect(origin: CGPoint(x: 20, y: 100), size: CGSize(width: 340, height: 100)), views: views)
         test.clickBlock = { (idx) in
             print(idx)
         }
-        test.tailWidth = 20.0
         test.layer.borderWidth = 1.0
         self.view.addSubview(test)
     }
-
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.

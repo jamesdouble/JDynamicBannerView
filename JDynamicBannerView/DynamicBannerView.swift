@@ -449,9 +449,10 @@ extension DynamicCycleScrollView: UICollectionViewDataSource {
             } else if cahceView.tag == 1, let secondView = viewBlock?(indexPath.item) {
                 cell.insertRootView(secondView, edges: self.edges)
             }
-        } else if let view = viewBlock?(indexPath.item) { //無緩存
-            viewCache[indexPath.item] = view
-            cell.insertRootView(view, edges: self.edges)
+        } else if let newView = viewBlock?(indexPath.item) { //無緩存
+            newView.tag = 1
+            viewCache[indexPath.item] = newView
+            cell.insertRootView(newView, edges: self.edges)
         }
         return cell
     }
