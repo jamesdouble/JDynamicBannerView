@@ -64,6 +64,9 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
     internal var isInfinite: Bool {
         return dynamicCycleScrollView.infinityScrolling
     }
+    internal var leadWidth: CGFloat {
+        return dynamicCycleScrollView.leadWidth
+    }
     internal var tailWidth: CGFloat {
         return dynamicCycleScrollView.tailWidth
     }
@@ -96,7 +99,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         self.actualItemSize = {
             let realTailWidth = viewCount < 2 ? 0 : tailWidth
             let realCellGap = viewCount < 2 ? 0 : actualInteritemSpacing
-            let width: CGFloat = viewCount < 2 ? (frame.width - edges.left - edges.right) : (frame.width - edges.left - realTailWidth - realCellGap)
+            let width: CGFloat = viewCount < 2 ? (frame.width - edges.left - edges.right) : (frame.width - edges.left - leadWidth - realTailWidth - realCellGap)
             let height: CGFloat = collectionView.frame.height
             let size = CGSize(width: width <= 0 ? 10 : width, height: height <= 0 ? 10 : height)
             return size
@@ -170,7 +173,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         let rect = CGRect(x: proposedContentOffset.x, y: 0, width: (collectionView.frame.width), height: (collectionView.frame.height))
         guard let attrs = self.layoutAttributesForElements(in: rect) else { return proposedContentOffset }
         // 计算CollectionView最中心点的x值 这里要求 最终的 要考虑惯性
-        let centerX = (self.actualItemSize.width) / 2 + proposedContentOffset.x
+        let centerX = leadWidth + (self.actualItemSize.width) / 2 + proposedContentOffset.x
         var minDelta: CGFloat = 9999
         for attr in attrs {
             if abs(Int32(minDelta)) > abs(Int32(attr.center.x - centerX)) {
@@ -189,7 +192,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
     
     func contentOffset(for indexPath: IndexPath) -> CGPoint {
         let origin = self.frame(for: indexPath).origin
-        let contentOffset = CGPoint(x: origin.x, y: 0)
+        let contentOffset = CGPoint(x: origin.x - leadWidth, y: 0)
         return contentOffset
     }
     
@@ -261,10 +264,12 @@ extension DynamicCycleCollectionViewLayout {
     }
     
     private func getNowIndexPath() -> IndexPath {
-        guard let collectionView = self.collectionView, self.itemSpacing > 0, self.numberOfItems > 1 else {
+        guard let collectionView = self.collectionView,
+            self.itemSpacing > 0,
+            self.numberOfItems > 1 else {
             return IndexPath(item: 0, section: 0)
         }
-        let nowOffsetX = collectionView.contentOffset.x - self.leadingSpacing
+        let nowOffsetX = collectionView.contentOffset.x - self.leadingSpacing + leadWidth
         let itemsCount: Int = Int(nowOffsetX / self.itemSpacing)   //seciton * count + items
         let currentIndex = itemsCount % self.numberOfItems
         let currentSection = (itemsCount - currentIndex) / self.numberOfItems
@@ -302,6 +307,12 @@ protocol DynamicCycleScrollViewDataSource {
     }
     
     public var cellGap: CGFloat = 5 {
+        didSet {
+            collectionViewLayout.forceInvalidate()
+        }
+    }
+    
+    public var leadWidth: CGFloat = 0.0 {
         didSet {
             collectionViewLayout.forceInvalidate()
         }
