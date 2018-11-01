@@ -290,7 +290,7 @@ protocol DynamicCycleScrollViewDataSource {
     func viewFor(_ cycleView: DynamicCycleScrollView) -> UIView
 }
 
-@IBDesignable class DynamicCycleScrollView: UIView {
+@IBDesignable public class DynamicCycleScrollView: UIView {
         
     ///統一上下左右間距
     public var defaultInsects: CGFloat = 5 {
@@ -409,7 +409,7 @@ protocol DynamicCycleScrollViewDataSource {
 
 extension DynamicCycleScrollView {
     
-    override func didMoveToWindow() {
+    override public func didMoveToWindow() {
         super.didMoveToWindow()
         if self.window != nil && self.autoScrolling {
             scrollTimer?.invalidate()
@@ -420,7 +420,7 @@ extension DynamicCycleScrollView {
         }
     }
     
-    override func didMoveToSuperview() {
+    override public func didMoveToSuperview() {
         let trigger = edges
         self.edges = trigger
         let auto = self.autoScrolling
@@ -504,11 +504,11 @@ extension DynamicCycleScrollView: UICollectionViewDataSource {
         return self.numberOfSections
     }
     
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+    public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return viewCount
     }
     
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+    public func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "DynamicCycleScrollViewCell", for: indexPath) as! DynamicCycleScrollViewCell
         if let cahceView = viewCache[indexPath.item] {  //有緩存
             if cahceView.tag == 0 { //未被佔用
