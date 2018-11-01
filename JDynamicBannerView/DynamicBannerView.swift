@@ -107,10 +107,10 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         self.itemSpacing = self.actualItemSize.width + self.actualInteritemSpacing
         // Calculate and cache contentSize, rather than calculating each time
         self.contentSize = {
-            let numberOfItems = self.numberOfItems * self.numberOfSections
+            let itemsCount = self.numberOfItems * self.numberOfSections
             var contentSizeWidth: CGFloat = self.leadingSpacing*2 // Leading & trailing spacing
-            contentSizeWidth += CGFloat(numberOfItems-1)*self.actualInteritemSpacing // Interitem spacing
-            contentSizeWidth += CGFloat(numberOfItems)*self.actualItemSize.width // Item sizes
+            contentSizeWidth += CGFloat(itemsCount-1)*self.actualInteritemSpacing // Interitem spacing
+            contentSizeWidth += CGFloat(itemsCount)*self.actualItemSize.width // Item sizes
             let contentSize = CGSize(width: contentSizeWidth, height: collectionView.frame.height)
             return contentSize
         }()
@@ -143,7 +143,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         
         var origin = startPosition
         let maxPosition = min(rect.maxX, self.contentSize.width - self.actualItemSize.width - self.leadingSpacing)
-        var condition = max(CGFloat(100.0) * .ulpOfOne * fabs(origin+maxPosition), .leastNonzeroMagnitude)
+        var condition = max(CGFloat(100.0) * .ulpOfOne * abs(origin+maxPosition), .leastNonzeroMagnitude)
         while origin-maxPosition <= condition {
             let indexPath = IndexPath(item: itemIndex % self.numberOfItems, section: itemIndex/self.numberOfItems)
             let attributes = self.layoutAttributesForItem(at: indexPath)
@@ -151,7 +151,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
             layoutAttributes.append(attributes)
             itemIndex += 1
             origin += self.itemSpacing
-            condition = max(CGFloat(100.0) * .ulpOfOne * fabs(origin+maxPosition), .leastNonzeroMagnitude)
+            condition = max(CGFloat(100.0) * .ulpOfOne * abs(origin+maxPosition), .leastNonzeroMagnitude)
         }
         return layoutAttributes
     }
@@ -187,16 +187,16 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         self.invalidateLayout()
     }
     
-    internal func contentOffset(for indexPath: IndexPath) -> CGPoint {
+    func contentOffset(for indexPath: IndexPath) -> CGPoint {
         let origin = self.frame(for: indexPath).origin
         let contentOffset = CGPoint(x: origin.x, y: 0)
         return contentOffset
     }
     
-    internal func frame(for indexPath: IndexPath) -> CGRect {
-        let numberOfItems = self.numberOfItems*indexPath.section + indexPath.item
+    private func frame(for indexPath: IndexPath) -> CGRect {
+        let itemsCount = self.numberOfItems * indexPath.section + indexPath.item
         let originX: CGFloat = {
-            return self.leadingSpacing + CGFloat(numberOfItems) * self.itemSpacing
+            return self.leadingSpacing + CGFloat(itemsCount) * self.itemSpacing
         }()
         let originY: CGFloat = {
             return (self.collectionView!.frame.height-self.actualItemSize.height)*0.5
@@ -206,24 +206,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         return frame
     }
     
-    public func getNowIndexPath() -> IndexPath {
-        guard let collectionView = self.collectionView else {
-            return IndexPath(item: 0, section: 0)
-        }
-        let nowOffset = collectionView.contentOffset
-        let currentIndex = Int(nowOffset.x / self.itemSpacing) % self.numberOfItems
-        if currentIndex + 1 == self.numberOfItems {
-            let currentSection = Int(nowOffset.x) / (Int(self.itemSpacing) * self.numberOfItems)
-            let nowIndexPath = IndexPath(item: 0, section: currentSection + 1)
-            return nowIndexPath
-        } else {
-            let currentSection = Int(nowOffset.x) / (Int(self.itemSpacing) * self.numberOfItems)
-            let nowIndexPath = IndexPath(item: currentIndex + 1, section: currentSection)
-            return nowIndexPath
-        }
-    }
-    
-    fileprivate func adjustCollectionViewBounds() {
+    private func adjustCollectionViewBounds() {
         guard let collectionView = self.collectionView else {
             return
         }
@@ -233,7 +216,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         collectionView.bounds = newBounds
     }
     
-    fileprivate func applyTransform(to attributes: UICollectionViewLayoutAttributes) {
+    private func applyTransform(to attributes: UICollectionViewLayoutAttributes) {
         guard let collectionView = self.collectionView else {
             return
         }
@@ -244,6 +227,56 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         let transform = CGAffineTransform(scaleX: 1, y: yscale)
         attributes.transform = transform
     }
+}
+
+//MARK: 切換Offset相關
+extension DynamicCycleCollectionViewLayout {
+    
+    fileprivate func getNextContentOffset() -> CGPoint {
+        let nowIndex = self.getNowIndexPath()
+        let nextIndexPath: IndexPath
+        if nowIndex.item == (self.numberOfItems - 1) && nowIndex.section > 0 {
+            nextIndexPath = IndexPath(item: 0, section: nowIndex.section + 1)
+        } else {
+            nextIndexPath = IndexPath(item: nowIndex.item + 1, section: nowIndex.section)
+        }
+        return self.contentOffset(for: nextIndexPath)
+    }
+    
+    fileprivate func getPreviousContentOffset() -> CGPoint {
+        let nowIndex = self.getNowIndexPath()
+        let previousIndexPath: IndexPath
+        if nowIndex.item == 0 && nowIndex.section > 0 {
+            previousIndexPath = IndexPath(item: (self.numberOfItems - 1), section: nowIndex.section - 1)
+        } else {
+            previousIndexPath = IndexPath(item: nowIndex.item - 1, section: nowIndex.section)
+        }
+        return self.contentOffset(for: previousIndexPath)
+    }
+    
+    fileprivate func setIndexPath(to idx: Int) -> CGPoint? {
+        let nowIndex = self.getNowIndexPath()
+        let nowIndexPath = IndexPath(item: idx, section: nowIndex.section)
+        return self.contentOffset(for: nowIndexPath)
+    }
+    
+    private func getNowIndexPath() -> IndexPath {
+        guard let collectionView = self.collectionView, self.itemSpacing > 0, self.numberOfItems > 1 else {
+            return IndexPath(item: 0, section: 0)
+        }
+        let nowOffsetX = collectionView.contentOffset.x - self.leadingSpacing
+        let itemsCount: Int = Int(nowOffsetX / self.itemSpacing)   //seciton * count + items
+        let currentIndex = itemsCount % self.numberOfItems
+        let currentSection = (itemsCount - currentIndex) / self.numberOfItems
+        return IndexPath(item: currentIndex, section: currentSection)
+    }
+    
+    fileprivate func resetToMiddle() -> CGPoint? {
+        guard dynamicCycleScrollView.infinityScrolling && self.numberOfItems > 1 else { return nil }
+        let nowIndex = self.getNowIndexPath()
+        let middleSection = (dynamicCycleScrollView.numberOfSections + 1) / 2
+        return self.contentOffset(for: IndexPath(item: nowIndex.item, section: middleSection - 1))
+    }
     
 }
 
@@ -253,7 +286,7 @@ protocol DynamicCycleScrollViewDataSource {
 }
 
 @IBDesignable class DynamicCycleScrollView: UIView {
-    
+        
     ///統一上下左右間距
     public var defaultInsects: CGFloat = 5 {
         didSet {
@@ -295,7 +328,7 @@ protocol DynamicCycleScrollViewDataSource {
                     timer.invalidate()
                 }
                 scrollTimer = Timer(timeInterval: autoScrollInterval, target: self, selector: #selector(DynamicCycleScrollView.fireTimer(sender:)), userInfo: nil, repeats: true)
-                RunLoop.current.add(scrollTimer!, forMode: .defaultRunLoopMode)
+                RunLoop.current.add(scrollTimer!, forMode: RunLoop.Mode.default)
             } else {
                 guard let timer = scrollTimer else { return }
                 timer.invalidate()
@@ -312,15 +345,9 @@ protocol DynamicCycleScrollViewDataSource {
     }
     
     public var minimumScale: CGFloat = 0.85
-    
     fileprivate var viewCount: Int = 0
     fileprivate var viewBlock: ((Int) -> UIView)?
     fileprivate var viewCache: [Int: UIView] = [:]
-    
-    fileprivate var numberOfSections: Int {
-        if viewCount == 0 { return 1 }
-        return self.infinityScrolling && (self.viewCount > 1) ? 1000 : 1
-    }
     
     public func setView(viewCount: Int, viewBlock: ((Int) -> UIView)?) {
         self.viewCount = viewCount
@@ -337,7 +364,6 @@ protocol DynamicCycleScrollViewDataSource {
     fileprivate var scrollTimer: Timer?
     ///防止下個Cell被釋放
     fileprivate var extraDisplayWidth: CGFloat = 20
-    //
     fileprivate var collectionViewLayout: DynamicCycleCollectionViewLayout!
     fileprivate var collectionView: UICollectionView!
     fileprivate var scrollViewLeadingConstraint: NSLayoutConstraint!
@@ -354,7 +380,9 @@ protocol DynamicCycleScrollViewDataSource {
     }
     
     required init?(coder aDecoder: NSCoder) {
-        fatalError()
+        super.init(coder: aDecoder)
+        self.commonInit()
+        self.defaultInsects = 5.0
     }
     
     convenience init() {
@@ -366,13 +394,16 @@ protocol DynamicCycleScrollViewDataSource {
         self.commonInit()
         self.defaultInsects = insects
     }
+}
+
+extension DynamicCycleScrollView {
     
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if self.window != nil {
+        if self.window != nil && self.autoScrolling {
             scrollTimer?.invalidate()
             scrollTimer = Timer(timeInterval: autoScrollInterval, target: self, selector: #selector(DynamicCycleScrollView.fireTimer(sender:)), userInfo: nil, repeats: true)
-            RunLoop.current.add(scrollTimer!, forMode: .defaultRunLoopMode)
+            RunLoop.current.add(scrollTimer!, forMode: RunLoop.Mode.default)
         } else {
             scrollTimer?.invalidate()
         }
@@ -385,12 +416,12 @@ protocol DynamicCycleScrollViewDataSource {
         self.autoScrolling = auto
     }
     
-    private func commonInit() {
+    fileprivate func commonInit() {
         collectionViewLayout = DynamicCycleCollectionViewLayout(cycleScrollView: self)
         initScrollView()
         self.clipsToBounds = false
         collectionViewLayout.actualItemSize = CGSize(width: 10, height: 10)
-        collectionView.decelerationRate = 0.05
+        collectionView.decelerationRate = UIScrollView.DecelerationRate(rawValue: 0.05)
     }
     
     private func initScrollView() {
@@ -422,15 +453,41 @@ protocol DynamicCycleScrollViewDataSource {
 extension DynamicCycleScrollView {
     
     @objc func fireTimer(sender: Any) {
+        toNext()
+    }
+    
+    public func setIndex(_ index: Int) {
+        guard let toIndex = self.collectionViewLayout.setIndexPath(to: index) else { return }
+        self.scrollTo(toIndex)
+    }
+    
+    public func toNext() {
+        goIndex(isNext: true)
+    }
+    
+    public func toPrevious() {
+        goIndex(isNext: false)
+    }
+    
+    private func goIndex(isNext: Bool) {
         if self.collectionView.isDragging || self.viewCount < 2 {
             return
         }
-        let next = self.collectionViewLayout.getNowIndexPath()
-        self.collectionView.scrollToItem(at: next, at: .left, animated: true)
+        let jumpOffset = isNext ? self.collectionViewLayout.getNextContentOffset() : self.collectionViewLayout.getPreviousContentOffset()
+        self.scrollTo(jumpOffset)
+    }
+    
+    private func scrollTo(_ offset: CGPoint) {
+        self.collectionView.setContentOffset(offset, animated: true)
     }
 }
 
 extension DynamicCycleScrollView: UICollectionViewDataSource {
+    
+    fileprivate var numberOfSections: Int {
+        if viewCount == 0 { return 1 }
+        return self.infinityScrolling && (self.viewCount > 1) ? 5 : 1
+    }
     
     func numberOfSections(in collectionView: UICollectionView) -> Int {
         return self.numberOfSections
@@ -469,7 +526,18 @@ extension DynamicCycleScrollView: UICollectionViewDelegate {
     }
     
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !self.autoScrolling { return }
         scrollTimer = Timer(timeInterval: autoScrollInterval, target: self, selector: #selector(DynamicCycleScrollView.fireTimer(sender:)), userInfo: nil, repeats: true)
-        RunLoop.current.add(scrollTimer!, forMode: .defaultRunLoopMode)
+        RunLoop.current.add(scrollTimer!, forMode: RunLoop.Mode.default)
+    }
+    
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        guard let offset = self.collectionViewLayout.resetToMiddle() else { return }
+        scrollView.setContentOffset(offset, animated: false)
+    }
+    
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        guard let offset = self.collectionViewLayout.resetToMiddle() else { return }
+        scrollView.setContentOffset(offset, animated: false)
     }
 }
