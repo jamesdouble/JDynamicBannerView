@@ -500,7 +500,7 @@ extension DynamicCycleScrollView: UICollectionViewDataSource {
         return self.infinityScrolling && (self.viewCount > 1) ? 5 : 1
     }
     
-    func numberOfSections(in collectionView: UICollectionView) -> Int {
+    public func numberOfSections(in collectionView: UICollectionView) -> Int {
         return self.numberOfSections
     }
     
@@ -528,26 +528,26 @@ extension DynamicCycleScrollView: UICollectionViewDataSource {
 
 extension DynamicCycleScrollView: UICollectionViewDelegate {
     
-    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+    public func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         self.clickBlock?(indexPath.row % self.viewCount)
     }
     
-    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         scrollTimer?.invalidate()
     }
     
-    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !self.autoScrolling { return }
         scrollTimer = Timer(timeInterval: autoScrollInterval, target: self, selector: #selector(DynamicCycleScrollView.fireTimer(sender:)), userInfo: nil, repeats: true)
         RunLoop.current.add(scrollTimer!, forMode: RunLoop.Mode.default)
     }
     
-    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         guard let offset = self.collectionViewLayout.resetToMiddle() else { return }
         scrollView.setContentOffset(offset, animated: false)
     }
     
-    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+    public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         guard let offset = self.collectionViewLayout.resetToMiddle() else { return }
         scrollView.setContentOffset(offset, animated: false)
     }
