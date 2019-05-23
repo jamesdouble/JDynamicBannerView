@@ -97,9 +97,10 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         let viewCount = self.numberOfItems
         let frame = dynamicCycleScrollView.frame
         self.actualItemSize = {
-            let realTailWidth = viewCount < 2 ? 0 : tailWidth
-            let realCellGap = viewCount < 2 ? 0 : actualInteritemSpacing
-            let width: CGFloat = viewCount < 2 ? (frame.width - edges.left - edges.right) : (frame.width - edges.left - leadWidth - realTailWidth - realCellGap)
+            //TODO: 有問題
+            let width: CGFloat = viewCount < 2 ?
+                (frame.width - edges.left - edges.right) :
+                (frame.width - edges.left - leadWidth - tailWidth - actualInteritemSpacing)
             let height: CGFloat = collectionView.frame.height
             let size = CGSize(width: width <= 0 ? 10 : width, height: height <= 0 ? 10 : height)
             return size
@@ -114,6 +115,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
             var contentSizeWidth: CGFloat = self.leadingSpacing*2 // Leading & trailing spacing
             contentSizeWidth += CGFloat(itemsCount-1)*self.actualInteritemSpacing // Interitem spacing
             contentSizeWidth += CGFloat(itemsCount)*self.actualItemSize.width // Item sizes
+            contentSizeWidth += dynamicCycleScrollView.extraDisplayWidth
             let contentSize = CGSize(width: contentSizeWidth, height: collectionView.frame.height)
             return contentSize
         }()
@@ -173,7 +175,7 @@ private class DynamicCycleCollectionViewLayout: UICollectionViewLayout {
         let rect = CGRect(x: proposedContentOffset.x, y: 0, width: (collectionView.frame.width), height: (collectionView.frame.height))
         guard let attrs = self.layoutAttributesForElements(in: rect) else { return proposedContentOffset }
         // 计算CollectionView最中心点的x值 这里要求 最终的 要考虑惯性
-        let centerX = leadWidth + (self.actualItemSize.width) / 2 + proposedContentOffset.x
+        let centerX: CGFloat = leadWidth + (self.actualItemSize.width) / 2 + proposedContentOffset.x
         var minDelta: CGFloat = 9999
         for attr in attrs {
             if abs(Int32(minDelta)) > abs(Int32(attr.center.x - centerX)) {
@@ -237,12 +239,17 @@ extension DynamicCycleCollectionViewLayout {
     
     fileprivate func getNextContentOffset() -> CGPoint {
         let nowIndex = self.getNowIndexPath()
-        let nextIndexPath: IndexPath
-        if nowIndex.item == (self.numberOfItems - 1) && nowIndex.section > 0 {
-            nextIndexPath = IndexPath(item: 0, section: nowIndex.section + 1)
+        let item: Int
+        let section: Int
+        if nowIndex.item == (self.numberOfItems - 1) && nowIndex.section >= 0 {
+            guard nowIndex.section + 1 < self.numberOfSections else { return self.contentOffset(for: nowIndex) }
+            item = 0
+            section = nowIndex.section + 1
         } else {
-            nextIndexPath = IndexPath(item: nowIndex.item + 1, section: nowIndex.section)
+            item = nowIndex.item + 1
+            section = nowIndex.section
         }
+        let nextIndexPath = IndexPath(item: item, section: section)
         return self.contentOffset(for: nextIndexPath)
     }
     
@@ -263,35 +270,37 @@ extension DynamicCycleCollectionViewLayout {
         return self.contentOffset(for: nowIndexPath)
     }
     
-    private func getNowIndexPath() -> IndexPath {
+    fileprivate func getNowIndexPath() -> IndexPath {
         guard let collectionView = self.collectionView,
             self.itemSpacing > 0,
             self.numberOfItems > 1 else {
-            return IndexPath(item: 0, section: 0)
+                return IndexPath(item: 0, section: 0)
         }
         let nowOffsetX = collectionView.contentOffset.x - self.leadingSpacing + leadWidth
-        let itemsCount: Int = Int(nowOffsetX / self.itemSpacing)   //seciton * count + items
-        let currentIndex = itemsCount % self.numberOfItems
-        let currentSection = (itemsCount - currentIndex) / self.numberOfItems
+        let itemsCount: CGFloat = nowOffsetX / self.itemSpacing   //seciton * count + items
+        let flowValue: CGFloat = itemsCount - CGFloat(Int(itemsCount))
+        let fixCount: Int = Int(flowValue > 0.5 ? itemsCount + 1 : itemsCount)
+        let currentIndex: Int = fixCount % self.numberOfItems
+        let currentSection: Int = (Int(fixCount) - currentIndex) / self.numberOfItems
         return IndexPath(item: currentIndex, section: currentSection)
     }
     
-    fileprivate func resetToMiddle() -> CGPoint? {
-        guard dynamicCycleScrollView.infinityScrolling && self.numberOfItems > 1 else { return nil }
+    fileprivate func resetToMiddle() -> (CGPoint?) {
+        guard self.numberOfItems > 1, self.isInfinite else { return nil }
         let nowIndex = self.getNowIndexPath()
         let middleSection = (dynamicCycleScrollView.numberOfSections + 1) / 2
-        return self.contentOffset(for: IndexPath(item: nowIndex.item, section: middleSection - 1))
+        let middleIP = IndexPath(item: nowIndex.item, section: middleSection - 1)
+        return self.contentOffset(for: middleIP)
     }
+}
+
+protocol DynamicCycleScrollViewDelegate {
+    func didScrollToPage(_ page: Int)
+}
+
+@IBDesignable class DynamicCycleScrollView: UIView {
     
-}
-
-protocol DynamicCycleScrollViewDataSource {
-    func numberOfRowsIn(_ cycleView: DynamicCycleScrollView) -> Int
-    func viewFor(_ cycleView: DynamicCycleScrollView) -> UIView
-}
-
-@IBDesignable public class DynamicCycleScrollView: UIView {
-        
+    public var delegate: DynamicCycleScrollViewDelegate?
     ///統一上下左右間距
     public var defaultInsects: CGFloat = 5 {
         didSet {
@@ -348,6 +357,12 @@ protocol DynamicCycleScrollViewDataSource {
         }
     }
     
+    public var showPageCounter: Bool = false {
+        didSet {
+            self.counterView.isHidden = !showPageCounter
+        }
+    }
+    
     ///是否無限輪播
     public var infinityScrolling: Bool = true {
         didSet {
@@ -365,9 +380,9 @@ protocol DynamicCycleScrollViewDataSource {
         self.viewBlock = viewBlock
         viewCache.removeAll()
         self.collectionView.isScrollEnabled = viewCount > 1
-        self.infinityScrolling = viewCount > 1
         self.collectionViewLayout.forceInvalidate()
         self.collectionView.reloadData()
+        self.counterView.setCounter(0, totalCount: self.viewCount)
     }
     
     public var clickBlock: ((Int) -> Void)?
@@ -379,6 +394,7 @@ protocol DynamicCycleScrollViewDataSource {
     fileprivate var collectionView: UICollectionView!
     fileprivate var scrollViewLeadingConstraint: NSLayoutConstraint!
     fileprivate var scrollViewTrailingConstraint: NSLayoutConstraint!
+    fileprivate var counterView: DynamicCycleScrollPageCountView!
     //
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -409,7 +425,7 @@ protocol DynamicCycleScrollViewDataSource {
 
 extension DynamicCycleScrollView {
     
-    override public func didMoveToWindow() {
+    override func didMoveToWindow() {
         super.didMoveToWindow()
         if self.window != nil && self.autoScrolling {
             scrollTimer?.invalidate()
@@ -420,7 +436,7 @@ extension DynamicCycleScrollView {
         }
     }
     
-    override public func didMoveToSuperview() {
+    override func didMoveToSuperview() {
         let trigger = edges
         self.edges = trigger
         let auto = self.autoScrolling
@@ -433,6 +449,7 @@ extension DynamicCycleScrollView {
         self.clipsToBounds = false
         collectionViewLayout.actualItemSize = CGSize(width: 10, height: 10)
         collectionView.decelerationRate = UIScrollView.DecelerationRate(rawValue: 0.05)
+        initPageCounterView()
     }
     
     private func initScrollView() {
@@ -447,11 +464,21 @@ extension DynamicCycleScrollView {
         collectionView.register(DynamicCycleScrollViewCell.self, forCellWithReuseIdentifier: "DynamicCycleScrollViewCell")
         self.addSubview(collectionView)
         //
-        let scrollViewTopConstraint = NSLayoutConstraint(item: collectionView, attribute: .top, relatedBy: .equal, toItem: self, attribute: .top, multiplier: 1.0, constant: 0)
-        scrollViewLeadingConstraint = NSLayoutConstraint(item: collectionView, attribute: .leading, relatedBy: .equal, toItem: self, attribute: .leading, multiplier: 1.0, constant: edges.left)
-        scrollViewTrailingConstraint = NSLayoutConstraint(item: collectionView, attribute: .trailing, relatedBy: .equal, toItem: self, attribute: .trailing, multiplier: 1.0, constant: extraDisplayWidth)
-        let scrollViewBottomConstraint = NSLayoutConstraint(item: collectionView, attribute: .bottom, relatedBy: .equal, toItem: self, attribute: .bottom, multiplier: 1.0, constant: 0)
+        let scrollViewTopConstraint = NSLayoutConstraint(item: collectionView!, attribute: .top, relatedBy: .equal, toItem: self, attribute: .top, multiplier: 1.0, constant: 0)
+        scrollViewLeadingConstraint = NSLayoutConstraint(item: collectionView!, attribute: .leading, relatedBy: .equal, toItem: self, attribute: .leading, multiplier: 1.0, constant: edges.left)
+        scrollViewTrailingConstraint = NSLayoutConstraint(item: collectionView!, attribute: .trailing, relatedBy: .equal, toItem: self, attribute: .trailing, multiplier: 1.0, constant: extraDisplayWidth)
+        let scrollViewBottomConstraint = NSLayoutConstraint(item: collectionView!, attribute: .bottom, relatedBy: .equal, toItem: self, attribute: .bottom, multiplier: 1.0, constant: 0)
         self.addConstraints([scrollViewTopConstraint, scrollViewLeadingConstraint, scrollViewTrailingConstraint, scrollViewBottomConstraint])
+    }
+    
+    private func initPageCounterView() {
+        counterView = DynamicCycleScrollPageCountView()
+        counterView.isHidden = !self.showPageCounter
+        self.addSubview(counterView)
+        //
+        let counterTrail = NSLayoutConstraint(item: counterView!, attribute: .trailing, relatedBy: .equal, toItem: self, attribute: .trailing, multiplier: 1.0, constant: -16)
+        let counterLead = NSLayoutConstraint(item: counterView!, attribute: .bottom, relatedBy: .equal, toItem: self, attribute: .bottom, multiplier: 1.0, constant: -16)
+        self.addConstraints([counterTrail, counterLead])
     }
     
     private func changeConstraint() {
@@ -500,15 +527,15 @@ extension DynamicCycleScrollView: UICollectionViewDataSource {
         return self.infinityScrolling && (self.viewCount > 1) ? 5 : 1
     }
     
-    public func numberOfSections(in collectionView: UICollectionView) -> Int {
+    func numberOfSections(in collectionView: UICollectionView) -> Int {
         return self.numberOfSections
     }
     
-    public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return viewCount
     }
     
-    public func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "DynamicCycleScrollViewCell", for: indexPath) as! DynamicCycleScrollViewCell
         if let cahceView = viewCache[indexPath.item] {  //有緩存
             if cahceView.tag == 0 { //未被佔用
@@ -528,27 +555,92 @@ extension DynamicCycleScrollView: UICollectionViewDataSource {
 
 extension DynamicCycleScrollView: UICollectionViewDelegate {
     
-    public func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         self.clickBlock?(indexPath.row % self.viewCount)
     }
     
-    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         scrollTimer?.invalidate()
     }
     
-    public func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !self.autoScrolling { return }
         scrollTimer = Timer(timeInterval: autoScrollInterval, target: self, selector: #selector(DynamicCycleScrollView.fireTimer(sender:)), userInfo: nil, repeats: true)
         RunLoop.current.add(scrollTimer!, forMode: RunLoop.Mode.default)
     }
     
-    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        guard let offset = self.collectionViewLayout.resetToMiddle() else { return }
-        scrollView.setContentOffset(offset, animated: false)
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        let nowIP = self.collectionViewLayout.getNowIndexPath()
+        self.counterView.setCounter(nowIP.item, totalCount: self.viewCount)
+        self.delegate?.didScrollToPage(nowIP.item)
     }
     
-    public func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        guard let offset = self.collectionViewLayout.resetToMiddle() else { return }
-        scrollView.setContentOffset(offset, animated: false)
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        self.resetToMiddle()
     }
+    
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        self.resetToMiddle()
+    }
+    
+    private func resetToMiddle() {
+        guard let offset = self.collectionViewLayout.resetToMiddle() else { return }
+        self.collectionView.setContentOffset(offset, animated: !self.infinityScrolling)
+    }
+}
+
+private class DynamicCycleScrollPageCountView: UIView {
+    
+    private var counterLabel = UILabel()
+    
+    public func setCounter(_ nowIndex: Int, totalCount: Int) {
+        counterLabel.text = "\(nowIndex+1)/\(totalCount)"
+    }
+    
+    init() {
+        super.init(frame: CGRect.zero)
+        self.backgroundColor = UIColor(red: 0, green: 0, blue: 0, alpha: 0.5)
+        //
+        self.translatesAutoresizingMaskIntoConstraints = false
+        let heightLC = NSLayoutConstraint(item: self,
+                                          attribute: .height,
+                                          relatedBy: .equal,
+                                          toItem: nil,
+                                          attribute: .notAnAttribute,
+                                          multiplier: 1.0,
+                                          constant: 18)
+        self.layer.cornerRadius = 9
+        //
+        self.counterLabel.font = UIFont.systemFont(ofSize: 12)
+        self.counterLabel.textColor = UIColor.white
+        self.addSubview(counterLabel)
+        counterLabel.translatesAutoresizingMaskIntoConstraints = false
+        let contentWidthLC = NSLayoutConstraint(item: self,
+                                                attribute: .width,
+                                                relatedBy: .equal,
+                                                toItem: counterLabel,
+                                                attribute: .width,
+                                                multiplier: 1.0,
+                                                constant: 12)
+        let labelCenterXLC = NSLayoutConstraint(item: self,
+                                                attribute: .centerX,
+                                                relatedBy: .equal,
+                                                toItem: counterLabel,
+                                                attribute: .centerX,
+                                                multiplier: 1.0,
+                                                constant: 0)
+        let labelCenterYLC = NSLayoutConstraint(item: self,
+                                                attribute: .centerY,
+                                                relatedBy: .equal,
+                                                toItem: counterLabel,
+                                                attribute: .centerY,
+                                                multiplier: 1.0,
+                                                constant: 0)
+        self.addConstraints([heightLC, contentWidthLC, labelCenterXLC, labelCenterYLC])
+    }
+    
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
 }
